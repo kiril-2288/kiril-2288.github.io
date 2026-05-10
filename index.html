@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Эквалайзер</title>
+  <style>
+    body { background: #111; color: white; text-align: center; font-family: sans-serif; padding-top: 50px; }
+    input { padding: 10px; font-size: 18px; text-align: center; margin-bottom: 20px; border-radius: 5px; }
+    button { padding: 15px 30px; font-size: 20px; background: #00ff88; border: none; border-radius: 10px; cursor: pointer; font-weight: bold;}
+    #status { margin-top: 20px; color: #aaa; }
+  </style>
+</head>
+<body>
+  <h2>Микрофон -> Лента ESP32</h2>
+  
+  <p>Введи IP-адрес твоей платы из Arduino IDE:</p>
+  <input type="text" id="ipAddress" placeholder="192.168.1.100">
+  <br>
+  <button id="btn">Начать работу</button>
+  <div id="status">Жду настройки...</div>
+
+  <script>
+    const btn = document.getElementById('btn');
+    const status = document.getElementById('status');
+    const ipInput = document.getElementById('ipAddress');
+
+    btn.onclick = async () => {
+      const espIp = ipInput.value.trim();
+      if(!espIp) {
+        alert("Сначала введи IP адрес!");
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        status.innerText = "Слушаю звук! Можешь включать музыку.";
+        btn.style.display = 'none';
+        ipInput.style.display = 'none';
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = audioCtx.createAnalyser();
+        const source = audioCtx.createMediaStreamSource(stream);
+        source.connect(analyser);
+        
+        analyser.fftSize = 256;
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+        setInterval(() => {
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for(let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+          let average = sum / dataArray.length;
+          
+          let level = Math.floor(average / 4); 
+          if(level > 7) level = 7;
+          
+          // Отправляем данные на локальный IP адрес ESP32
+          fetch('http://' + espIp + '/set?lvl=' + level).catch(e => {});
+        }, 50);
+
+      } catch (err) {
+        status.innerText = "Ошибка доступа к микрофону.";
+        console.error(err);
+      }
+    };
+  </script>
+</body>
+</html>
